@@ -113,8 +113,10 @@ namespace StrmAssistant.Common
 
                 if (_getStaticMediaSources is null)
                 {
-                    _logger.Warn($"{nameof(MediaInfoApi)} - GetStaticMediaSources method not found - Will use public API");
+                    _logger.Warn($"{nameof(MediaInfoApi)} - GetStaticMediaSources method not found via reflection - Will use public API");
+                    // 如果找不到反射方法，使用公共API（即None，但功能仍然可用）
                     PatchTracker.FallbackPatchApproach = PatchApproach.None;
+                    _logger.Info($"{nameof(MediaInfoApi)} - Will use public GetStaticMediaSources API (feature will work normally)");
                 }
                 else if (Plugin.Instance.IsModSupported)
                 {
@@ -129,9 +131,9 @@ namespace StrmAssistant.Common
                 }
                 else
                 {
-                    // 不支持Harmony，使用Reflection
+                    // 不支持Harmony，但找到了反射方法，使用Reflection
                     PatchTracker.FallbackPatchApproach = PatchApproach.Reflection;
-                    _logger.Info($"{nameof(MediaInfoApi)} - Using Reflection approach (Harmony not supported)");
+                    _logger.Info($"{nameof(MediaInfoApi)} - Using Reflection approach (Harmony not supported, but reflection method found)");
                 }
             }
 

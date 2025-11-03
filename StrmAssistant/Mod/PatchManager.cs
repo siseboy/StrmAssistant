@@ -107,45 +107,61 @@ namespace StrmAssistant.Mod
             });
         }
 
+        private static bool? _lastModSuccessStatus = null;
+        private static string _lastStatusLog = null;
+        
         public static bool IsModSuccess()
         {
             var supportedPatches = PatchTrackerList.Where(p => p.IsSupported).ToList();
             var failedPatches = supportedPatches.Where(p => p.FallbackPatchApproach != p.DefaultPatchApproach).ToList();
             
-            if (failedPatches.Any())
+            // 构建状态字符串用于比较，避免重复日志
+            var statusLog = failedPatches.Any() 
+                ? $"{failedPatches.Count}/{supportedPatches.Count}" + string.Join(",", failedPatches.Select(p => $"{p.PatchType.Name}:{p.FallbackPatchApproach}"))
+                : "AllSuccess";
+            
+            // 只在状态改变或首次调用时记录日志
+            if (_lastStatusLog != statusLog)
             {
-                Plugin.Instance.Logger.Info($"=== Harmony Mod Status: {failedPatches.Count}/{supportedPatches.Count} patches using fallback methods ===");
+                _lastStatusLog = statusLog;
                 
-                // 按回退方式分组显示
-                var byReflection = failedPatches.Where(p => p.FallbackPatchApproach == PatchApproach.Reflection).ToList();
-                var byNone = failedPatches.Where(p => p.FallbackPatchApproach == PatchApproach.None).ToList();
-                
-                if (byReflection.Any())
+                if (failedPatches.Any())
                 {
-                    Plugin.Instance.Logger.Info($"Using Reflection approach ({byReflection.Count} patches):");
-                    foreach (var patch in byReflection)
+                    Plugin.Instance.Logger.Info($"=== Harmony Mod Status: {failedPatches.Count}/{supportedPatches.Count} patches using fallback methods ===");
+                    
+                    // 按回退方式分组显示
+                    var byReflection = failedPatches.Where(p => p.FallbackPatchApproach == PatchApproach.Reflection).ToList();
+                    var byNone = failedPatches.Where(p => p.FallbackPatchApproach == PatchApproach.None).ToList();
+                    
+                    if (byReflection.Any())
                     {
-                        Plugin.Instance.Logger.Info($"  ✓ {patch.PatchType.Name} - Using Reflection (Harmony ReversePatch not available, but Reflection works fine)");
+                        Plugin.Instance.Logger.Info($"Using Reflection approach ({byReflection.Count} patches):");
+                        foreach (var patch in byReflection)
+                        {
+                            Plugin.Instance.Logger.Info($"  ✓ {patch.PatchType.Name} - Using Reflection (Harmony ReversePatch not available, but Reflection works fine)");
+                        }
                     }
+                    
+                    if (byNone.Any())
+                    {
+                        Plugin.Instance.Logger.Warn($"Not available ({byNone.Count} patches):");
+                        foreach (var patch in byNone)
+                        {
+                            Plugin.Instance.Logger.Warn($"  ✗ {patch.PatchType.Name} - Feature disabled (required method/plugin not found)");
+                        }
+                    }
+                    
+                    Plugin.Instance.Logger.Info("Note: Using Reflection instead of Harmony is normal and expected. All features will work correctly.");
                 }
-                
-                if (byNone.Any())
+                else if (supportedPatches.Any())
                 {
-                    Plugin.Instance.Logger.Warn($"Not available ({byNone.Count} patches):");
-                    foreach (var patch in byNone)
-                    {
-                        Plugin.Instance.Logger.Warn($"  ✗ {patch.PatchType.Name} - Feature disabled (required method/plugin not found)");
-                    }
+                    Plugin.Instance.Logger.Info($"Harmony Mod: All {supportedPatches.Count} patches initialized successfully");
                 }
-                
-                Plugin.Instance.Logger.Info("Note: Using Reflection instead of Harmony is normal and expected. All features will work correctly.");
-            }
-            else if (supportedPatches.Any())
-            {
-                Plugin.Instance.Logger.Info($"Harmony Mod: All {supportedPatches.Count} patches initialized successfully");
             }
             
-            return failedPatches.Count == 0;
+            var result = failedPatches.Count == 0;
+            _lastModSuccessStatus = result;
+            return result;
         }
 
         public static void CopyProperty(object source, object target, string propertyName)
