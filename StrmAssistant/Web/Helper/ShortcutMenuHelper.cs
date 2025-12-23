@@ -38,9 +38,28 @@ namespace StrmAssistant.Web.Helper
 
         private static void ModifyShortcutMenu(IServerConfigurationManager configurationManager)
         {
-            var dashboardSourcePath = configurationManager.Configuration.DashboardSourcePath ??
-                                      Path.Combine(configurationManager.ApplicationPaths.ApplicationResourcesPath,
-                                          "dashboard-ui");
+            var potentialPaths = new System.Collections.Generic.List<string>();
+
+            if (!string.IsNullOrEmpty(configurationManager.Configuration.DashboardSourcePath))
+            {
+                potentialPaths.Add(configurationManager.Configuration.DashboardSourcePath);
+            }
+
+            potentialPaths.Add(Path.Combine(configurationManager.ApplicationPaths.ApplicationResourcesPath, "dashboard-ui"));
+            potentialPaths.Add("/app/emby/dashboard-ui");
+            potentialPaths.Add("/system/dashboard-ui");
+            potentialPaths.Add("/usr/share/emby-server/dashboard-ui");
+
+            string dashboardSourcePath = potentialPaths.FirstOrDefault(p => Directory.Exists(p) && File.Exists(Path.Combine(p, "modules", "shortcuts.js")));
+
+            if (string.IsNullOrEmpty(dashboardSourcePath))
+            {
+                Plugin.Instance.Logger.Error($"Dashboard UI path not found. Searched: {string.Join(", ", potentialPaths)}");
+            }
+            else
+            {
+                Plugin.Instance.Logger.Info($"Found Dashboard UI at: {dashboardSourcePath}");
+            }
 
             const string injectShortcutCommand = @"
 const strmAssistantCommandSource = {
@@ -159,17 +178,13 @@ setTimeout(() => {
             var dataExplorer2Assembly = AppDomain.CurrentDomain.GetAssemblies()
                 .FirstOrDefault(a => a.GetName().Name == "Emby.DataExplorer2");
 
-            var shortcutsPath = Path.Combine(dashboardSourcePath, "modules", "shortcuts.js");
-            if (File.Exists(shortcutsPath))
+            if (!string.IsNullOrEmpty(dashboardSourcePath))
             {
-                ModifiedShortcutsString = File.ReadAllText(shortcutsPath) + injectShortcutCommand;
-            }
-            else
-            {
-                Plugin.Instance.Logger.Error($"shortcuts.js not found at {shortcutsPath}");
-                // 如果找不到原始文件，我们不能只是注入我们的代码，因为那会丢失原始功能。
-                // 但为了避免服务崩溃，我们保持 ModifiedShortcutsString 为 null。
-                // Service 层会处理 null 并返回空响应。
+                var shortcutsPath = Path.Combine(dashboardSourcePath, "modules", "shortcuts.js");
+                if (File.Exists(shortcutsPath))
+                {
+                    ModifiedShortcutsString = File.ReadAllText(shortcutsPath) + injectShortcutCommand;
+                }
             }
 
             if (dataExplorer2Assembly != null && !string.IsNullOrEmpty(ModifiedShortcutsString))
